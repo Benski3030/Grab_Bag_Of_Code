@@ -1,135 +1,143 @@
-icecream <- data.frame(
-  temp=c(11.9, 14.2, 15.2, 16.4, 17.2, 18.1, 
-         18.5, 19.4, 22.1, 22.6, 23.4, 25.1),
-  units=c(185L, 215L, 332L, 325L, 408L, 421L, 
-          406L, 412L, 522L, 445L, 544L, 614L)
-)
+library(e1071)
+library(pmml)
+library(randomForest)
+library(nnet)
+library(rgl)
+library(rpart)
+library(mgcv)
 
 
-basicPlot <- function(...){
-  plot(units ~ temp, data=icecream, bty="n", lwd=2,
-       main="Number of ice creams sold", col="#00526D", 
-       xlab="Temperature (Celsius)", 
-       ylab="Units sold", ...)
-  axis(side = 1, col="grey")
-  axis(side = 2, col="grey")
-}
-basicPlot()
+#Fun with Logistic Regression and friends (RF and SVM)
+#Set parameters for map, variables, 
+clr1 <- c(rgb(1,0,0,1),rgb(0,0,1,1))
+clr2 <- c(rgb(1,0,0,.2),rgb(0,0,1,.2))
+x <- c(.4,.55,.65,.9,.1,.35,.5,.15,.2,.85)
+y <- c(.85,.95,.8,.87,.5,.55,.5,.2,.1,.3)
+z <- c(1,1,1,1,1,0,0,1,0,0)
+df <- data.frame(x,y,z)
+
+plot(x,y,pch=19,cex=2)
+plot(x,y,pch=19,cex=2,col=clr1[z+1])
+
+#Goal is we want to predict
+#Try logistic regression
+reg=glm(z~x+y,data=df,family=binomial)
+summary(reg)
+pred_1 <- function(x,y){predict(reg,newdata=data.frame(x=x,y=y),type="response")>.5 }
+x_grid<-seq(0,1,length=101)
+y_grid<-seq(0,1,length=101)
+z_grid <- outer(x_grid,y_grid,pred_1)
+image(x_grid,y_grid,z_grid,col=clr2, main="Classification Using Logistic Regression")
+points(x,y,pch=19,cex=2,col=clr1[z+1])
 
 
-lsq.mod <- lsfit(icecream$temp, icecream$units)
-basicPlot()
-abline(lsq.mod, col="orange", lwd=2)
-legend(x="topleft", bty="n", lwd=c(2,2), lty=c(NA,1),
-       legend=c("observation", "linear least square"),
-       col=c("#00526D","orange"),  pch=c(1,NA))
+rfpred <- randomForest(z~x+y,data=df)
+summary(rfpred)
+pred_2 <- function(x,y){predict(rfpred,newdata=data.frame(x=x,y=y),type="response")>.5 }
+x_grid<-seq(0,1,length=101)
+y_grid<-seq(0,1,length=101)
+z_grid <- outer(x_grid,y_grid,pred_2)
+image(x_grid,y_grid,z_grid,col=clr2, main="Classification Using Decision Trees")
+points(x,y,pch=19,cex=2,col=clr1[z+1])
 
-lin.mod <- glm(units ~ temp, data=icecream, 
-               family=gaussian(link="identity"))
-library(arm) # for 'display' function only
-display(lin.mod)
+sppvect <- svm(z~x+y,data=df, kernel='radial')
+summary(sppvect)
+pred_2 <- function(x,y){predict(sppvect,newdata=data.frame(x=x,y=y),type="response")>.5 }
+x_grid<-seq(0,1,length=101)
+y_grid<-seq(0,1,length=101)
+z_grid <- outer(x_grid,y_grid,pred_2)
+image(x_grid,y_grid,z_grid,col=clr2, main="Classification Using Support Vector Machines")
+points(x,y,pch=19,cex=2,col=clr1[z+1])
 
-log.lin.mod <- glm(log(units) ~ temp, data=icecream, 
-                   family=gaussian(link="identity"))
-display(log.lin.mod)
-log.lin.sig <- summary(log.lin.mod)$dispersion
-log.lin.pred <- exp(predict(log.lin.mod) + 0.5*log.lin.sig)
-basicPlot()
-lines(icecream$temp, log.lin.pred, col="red", lwd=2)
-legend(x="topleft", bty="n", lwd=c(2,2), lty=c(NA,1),
-       legend=c("observation", "log-transformed LM"),
-       col=c("#00526D","red"), pch=c(1,NA))
+nnetpred <- nnet(z~x+y,data=df, size=100, softmax=FALSE)
+summary(nnetpred)
+pred_2 <- function(x,y){predict(nnetpred,newdata=data.frame(x=x,y=y),type="raw")>.5 }
+x_grid<-seq(0,1,length=101)
+y_grid<-seq(0,1,length=101)
+z_grid <- outer(x_grid,y_grid,pred_2)
+image(x_grid,y_grid,z_grid,col=clr2, main="Classification Using Neural Networks")
+points(x,y,pch=19,cex=2,col=clr1[z+1])
 
-pois.mod <- glm(units ~ temp, data=icecream, 
-                family=poisson(link="log"))
-display(pois.mod)
-pois.pred <- predict(pois.mod, type="response")
-basicPlot()
-lines(icecream$temp, pois.pred, col="blue", lwd=2)
-legend(x="topleft", bty="n", lwd=c(2,2), lty=c(NA,1),
-       legend=c("observation", "Poisson (log) GLM"),
-       col=c("#00526D","blue"), pch=c(1,NA))
+n <- 5000
+rtf <- function(x1, x2) { 
+  sin(x1+x2)/(x1+x2) }
 
+xgrid <- seq(1,6,length=31)
+ygrid <- seq(1,6,length=31)
+zgrid <- outer(xgrid,ygrid,rtf)
+persp(xgrid,ygrid,zgrid,theta=30, phi=30, col="yellow", ticktype="detailed",shade=TRUE)
 
-market.size <- 800
-icecream$opportunity <- market.size - icecream$units
-bin.glm <- glm(cbind(units, opportunity) ~ temp, data=icecream, 
-               family=binomial(link = "logit"))
-display(bin.glm)
-bin.pred <- predict(bin.glm, type="response")*market.size
-basicPlot()
-lines(icecream$temp, bin.pred, col="purple", lwd=2)
-legend(x="topleft", bty="n", lwd=c(2,2), lty=c(NA,1),
-       legend=c("observation", "Binomial (logit) GLM"),
-       col=c("#00526D","purple"),  pch=c(1,NA))
+df <- data.frame(x1=(runif(n, min=1, max=6)), x2=(runif(n, min=1, max=6)))
+df$m=rtf(df$x1, df$x2)
+df$y=df$m+rnorm(n,sd=.07)
 
-library(MASS)
+plot3d(df$x1,df$y,df$x2, col='grey')
 
-nbin.mod <- glm.nb(units ~ temp, data=icecream)
-summary(nbin.mod)
-nbin.pred <- predict(nbin.mod, type="response")
-basicPlot()
-lines(icecream$temp, nbin.pred, col="green", lwd=2)
-legend(x="topleft", bty="n", lwd=c(2,2), lty=c(NA,1),
-       legend=c("observation", "Negative Binomial Regression"),
-       col=c("#00526D","green"), pch=c(1,NA))
-
-
-temp <- 0:35
-p.lm <- predict(lin.mod, data.frame(temp=temp), type="response")
-p.log.lm <- exp(predict(log.lin.mod, data.frame(temp=0:35), type="response") + 
-                  0.5 * summary(log.lin.mod)$dispersion)
-p.pois <- predict(pois.mod, data.frame(temp=temp), type="response")
-p.bin <- predict(bin.glm, data.frame(temp=temp), type="response")*market.size 
-p.nb <- predict(nbin.mod, data.frame(temp=temp), type="response")
-basicPlot(xlim=range(temp), ylim=c(-20,market.size))
-lines(temp, p.lm, type="l", col="orange", lwd=2)
-lines(temp, p.log.lm, type="l", col="red", lwd=2)
-lines(temp, p.pois, type="l", col="blue", lwd=2)
-lines(temp, p.bin, type="l", col="purple", lwd=2)
-lines(temp, p.nb, type="l", col="green", lwd=2)
-legend(x="topleft", 
-       legend=c("observation", 
-                "linear model",
-                "log-transformed LM",
-                "Poisson (log) GLM",
-                "Binomial (logit) GLM",
-                "NB Model"),
-       col=c("#00526D","orange", "red", 
-             "blue", "purple", "green"),  
-       bty="n", lwd=rep(2,6), 
-       lty=c(NA,rep(1,5)),
-       pch=c(1,rep(NA,5)))
+reg=lm(y~I(x1^6)+I(x2^6),data=df)
+actual <- df$y
+predicted <- predict(reg,newdata=df)
+p=function(x1,x2) predict(reg,newdata=data.frame(x1=x1,x2=x2))
+grid=seq(1,6,length=31)
+ygrid=seq(1,6,length=31)
+zgrid=outer(xgrid,ygrid,p)
+persp(xgrid,ygrid,zgrid,theta=30, phi=30,col="green",shade=TRUE)
+persp3d(xgrid, ygrid, zgrid, color="green")
+#Compared to the RootMeanSqaure the lower value the better, reducing the error
+rsq <- 1-sum((actual-predicted)^2)/sum((actual-mean(actual))^2)
+rsq
+RMSE <- sqrt(mean((actual-predicted)^2))
+RMSE
 
 
+reg=rpart(y~x1+x2,data=df,method="anova")
+actual <- df$y
+predicted <- predict(reg,newdata=df)
+p=function(x1,x2) predict(reg,newdata=data.frame(x1=x1,x2=x2),type="vector")
+zgrid=outer(xgrid,ygrid,p)
+persp(xgrid,ygrid,zgrid,theta=30, phi=30, col="lightblue",shade=TRUE)
+persp3d(xgrid, ygrid, zgrid, color='lightblue')
+#Compared to the RootMeanSqaure the lower value the better, reducing the error
+rsq <- 1-sum((actual-predicted)^2)/sum((actual-mean(actual))^2)
+rsq
+RMSE <- sqrt(mean((actual-predicted)^2))
+RMSE
 
-n <- nrow(icecream)
-A <- model.matrix(units ~ temp, data=icecream)
-set.seed(1234)
-(rand.normal <- rnorm(n,
-                      mean=A %*% coef(lin.mod),
-                      sd=sqrt(summary(lin.mod)$dispersion)))
-(rand.logtrans <- rlnorm(n,
-                         meanlog=A %*% coef(log.lin.mod),
-                         sdlog=sqrt(summary(log.lin.mod)$dispersion)))
-(rand.pois <- rpois(n,
-                    lambda=exp(A %*% coef(pois.mod))))
-(rand.bin <- rbinom(n,
-                    size=market.size,
-                    prob=plogis(A %*% coef(bin.glm))))
-basicPlot(ylim=c(100,700))
-cols <- adjustcolor(c("orange", "red", "blue", "purple"), 
-                    alpha.f = 0.75)
-points(icecream$temp, rand.normal, pch=19, col=cols[1])
-points(icecream$temp, rand.logtrans, pch=19, col=cols[2])
-points(icecream$temp, rand.pois, pch=19, col=cols[3])
-points(icecream$temp, rand.bin, pch=19, col=cols[4])
-legend(x="topleft",
-       legend=c("observation",
-                "linear model",
-                "log-transformed LM",
-                "Poisson (log) GLM",
-                "Binomial (logit) GLM"),
-       col=c("#00526D",cols), lty=NA,
-       bty="n", lwd=rep(2,5),
-       pch=c(1,rep(19,4)))
+reg=randomForest(y~x1+x2,data=df)
+actual <- df$y
+predicted <- predict(reg,newdata=df)
+p=function(x1,x2) as.numeric(predict(reg,newdata=data.frame(x1=x1,x2=x2),type="response"))
+zgrid=outer(xgrid,ygrid,p)
+persp(xgrid,ygrid,zgrid,theta=30, phi=30,col="orange",shade=TRUE)
+persp3d(xgrid, ygrid, zgrid, color="orange")
+#Compared to the RootMeanSqaure the lower value the better, reducing the error
+rsq <- 1-sum((actual-predicted)^2)/sum((actual-mean(actual))^2)
+rsq
+RMSE <- sqrt(mean((actual-predicted)^2))
+RMSE
+
+
+reg=svm(y~x1+x2,data=df)
+actual <- df$y
+predicted <- predict(reg,newdata=df)
+p=function(x1,x2) as.numeric(predict(reg,newdata=data.frame(x1=x1,x2=x2),type="response"))
+zgrid=outer(xgrid,ygrid,p)
+persp(xgrid,ygrid,zgrid,theta=30, phi=30,col="red",shade=TRUE)
+persp3d(xgrid, ygrid, zgrid, color="red")
+#Compared to the RootMeanSqaure the lower value the better, reducing the error
+rsq <- 1-sum((actual-predicted)^2)/sum((actual-mean(actual))^2)
+rsq
+RMSE <- sqrt(mean((actual-predicted)^2))
+RMSE
+
+reg=gam(y~s(x1,x2),data=df)
+actual <- df$y
+predicted <- predict(reg,newdata=df)
+p=function(x1,x2) as.numeric(predict(reg,newdata=data.frame(x1=x1,x2=x2),type="response"))
+zgrid=outer(xgrid,ygrid,p)
+persp(xgrid,ygrid,zgrid,theta=30, phi=30,col="grey",shade=TRUE)
+persp3d(xgrid, ygrid, zgrid, color="grey")
+#Compared to the RootMeanSqaure the lower value the better, reducing the error
+rsq <- 1-sum((actual-predicted)^2)/sum((actual-mean(actual))^2)
+rsq
+RMSE <- sqrt(mean((actual-predicted)^2))
+RMSE
