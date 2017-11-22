@@ -1,0 +1,81 @@
+---
+title: "V2 Missle Hits"
+author: "Benjamin Harder"
+date: "11/7/2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+theme_set(theme_classic())
+```
+
+## Overview:
+Towards the end of the second world war, Germany began bombarding cities in the United Kingdom with a new weapon, called the V2.  The V2 was the first offensive ballistic missile and represented a considerable threat because of the size of the warhead in the rocket, and more importantly that once the rocket is launched, it was almost impossible to intercept.  As a result, the Allied strategy was primarily based on trying to predict where the missiles would land and evacuate those areas beforehand.  
+
+One fundamental question that needed to be answered was if the V2 was able to target specific locations precisely.  If this was the case, the V2 was more advanced than initially thought, and particular high-risk facilities would need to be evacuated or moved entirely, an undertaking that would be detrimental to the war effort.  If the missiles landed at random, it would be more difficult to react to them, but it would also mean less risk for important facilities.  
+
+The British intelligence service collected data about the location of missile hits throughout the United Kingdom.  A large map of the British Isles was broken down into squares of equal size, and the count of missile hits on each square was calculated, which resulted in the following table:
+
+| Counts | Missile Hits |
+|--------|--------------|
+| 0      | 229          |
+| 1      | 211          |
+| 2      | 93           |
+| 3      | 35           |
+| 4+     | 8            |
+
+
+Using this information, test the following hypothesis:
+
+H0 The V2 missile hits occur at random.
+H1 The V2 missile hits occur at specific points with precision. 
+
+```{r}
+counts <- c("0", "1", "2", "3", "4+")
+hits <- c(229, 211, 93, 35, 8)
+total_hits <- c(0, 211, 186, 105, 32)
+bomb_info <- data.frame(counts = counts, hits = hits, total_hits = total_hits)
+
+ggplot(bomb_info, aes(x = counts, y = hits)) +
+  geom_bar(stat = "identity") + 
+  ggtitle("Counts of Bomb Hits")
+```
+```{r}
+bomb_info <- bomb_info %>% 
+  mutate(act_freq = hits / sum(hits))
+
+
+
+#calc hit rate
+hit_rate <- sum(bomb_info$total_hits) / sum(bomb_info$hits)
+
+poisinfo <- rpois(100000,  lambda = hit_rate)
+pois_df <- data.frame(table(poisinfo))
+pois_toal <- sum(pois_df$Freq)
+
+
+exp_freq <- c(pois_df$Freq[1:4], sum(pois_df$Freq[5:8]))
+exp_freq <- exp_freq / sum(exp_freq)
+
+bomb_info <- cbind(bomb_info, exp_freq)
+```
+
+```{r}
+bomb_info %>% 
+  select(counts, exp_freq, act_freq) %>% 
+  gather(group, hits, -counts) %>% 
+  ggplot(aes(x = counts, y = hits, fill = group)) +
+    geom_bar(stat = "identity", position="dodge") + 
+    scale_y_continuous(labels = scales::percent) + 
+    ylab("Frequency") +
+    xlab("Hit Counts") + 
+    ggtitle("Bomb Hit Frequency")
+```
+
+
+
+```{r}
+chisq.test(bomb_info$hits, p = bomb_info$act_freq)
+```
