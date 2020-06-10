@@ -1,0 +1,190 @@
+---
+title: "KiddoPrediction"
+author: "Benjamin Harder"
+date: "6/10/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(lubridate)
+library(rstan)
+```
+
+## R Markdown
+
+Some good friends of ours are expecting their first child, and like most parents to be, they have started a "guess the characteristics of the baby" betting pool.  
+
+1. Will it be a boy or girl?
+2. On what day will the baby be born?
+3. What time will the baby be born?
+4. How much will the baby weigh? (in pounds/oz)
+5. How long will the baby be? (in inches)
+6. What will the baby's name be?
+
+This topic is interesting because kids are miracle and a **mystery of the universe.**  From a statistical perspective, I'm going to assume that the attributes surrounding the birth characteristics of a newborn child come from a deeply stochastic process.  Given this assumption of randomness, it begs the question - can data and analysis give me an edge in choosing the right characteristics and winning the bet?  
+
+We do know some demographic characteristics about her that can help guide the analysis:
+
+* Her due date is July 14th, 2020
+* She is in her late 30s
+* They do not know the gender
+* She has had an easy pregrancy with no complications
+* She lives in Canada3
+* They will be having one child, so no twins
+* This is her first child
+* She plans on having a natural birth
+
+
+### Data
+```{r cars}
+baby_data_all <- read_csv(
+    "birthdata.csv",
+    col_types = cols(
+      motherbirthdate = col_double(),
+      duedate = col_double(),
+      birthdate = col_double())) %>%
+  #select only relevant columns
+  select(motherbirthyear, 
+         duedate,
+         birthdate,
+         country, 
+         multiples, 
+         previousbirths, 
+         cesarean,
+         sex,
+         pounds,
+         ounces) %>%
+  #coerce unix timestamps into datetimes
+  mutate(duedate = as_datetime(duedate),
+         birthdate = as_datetime(birthdate)) %>% 
+  #filter out irrelevant characteristics
+  filter(multiples == 1) %>%  #only one kid
+  filter(previousbirths == 0) %>%  #no previous kids
+  filter(cesarean == 0) %>%  #natural birth
+  filter(sex != "NULL") %>% #filter null 
+  mutate(monther_age = 2020 - motherbirthyear, #age of the mother
+         miss_date = as.double(difftime(birthdate, #delta from due date
+                                        duedate, unit="days")), 
+         weight_oz = (pounds * 16) + ounces, #total weight in oz
+         sex = as.factor(sex)) %>%  #factorize
+  drop_na() %>% #no NAs
+  filter(monther_age %in% (30:45)) %>% #age range
+  filter(miss_date %in% (-20:20)) %>%  #missing date
+  filter(weight_oz > 1) %>%  #bad entries for weight
+  select(birthdate, country, sex, miss_date, pounds, ounces, weight_oz)
+```
+```{r}
+#Canadian Filter
+#there are a lot of Canadas in this data, need to combine them into one canada lable
+
+baby_data_ca <- baby_data_all %>% 
+  filter(country %in% c("Canada", "canada", "CANADA", "CAnada")) %>% 
+  select(-country)
+```
+
+
+### Analysis
+
+#### Will it be a boy or girl?
+```{r}
+table(baby_data_ca$sex)
+prop.table(table(baby_data_ca$sex))
+```
+Well this certainly looks like a crapshoot - maybe a simple binomial test can help determine if there is a difference between the boy/girl split
+
+```{r}
+#boy v girl
+gender_model_string <-
+"data {
+  # Number of data points
+  int n1;
+  # Number of successes
+  int y1[n1];
+}
+
+parameters {
+  real<lower=0, upper=1> theta1;
+}
+
+model {  
+  theta1 ~ beta(1, 1);
+  y1 ~ bernoulli(theta1);
+}
+
+generated quantities {
+}"
+
+#gender distro vector
+baby_gender <- c(rep(0, 151), rep(1, 144))
+gender_data_list <- list(y1 = baby_gender, n1 = length(baby_gender))
+stan_samples <- stan(model_code = gender_model_string, data = gender_data_list)
+s <- as.data.frame(stan_samples)
+mean(s$theta1)
+```
+
+```{r}
+```
+
+```{stan output.var=gender_model_string}
+data {
+  # Number of data points
+  int n1;
+  # Number of successes
+  int y1[n1];
+}
+
+parameters {
+  real<lower=0, upper=1> theta1;
+}
+
+model {  
+  theta1 ~ beta(1, 1);
+  y1 ~ bernoulli(theta1);
+}
+
+generated quantities {}
+
+```
+
+```{r}
+```
+
+
+#### On what day will the baby be born?
+```{r}
+
+```
+
+#### What time will the baby be born?
+```{r}
+
+```
+
+#### How much will the baby weigh? (in pounds/oz)
+```{r}
+
+```
+
+#### How long will the baby be? (in inches)
+```{r}
+
+```
+
+#### What will the baby's name be?
+```{r}
+
+```
+
+### Final Recommendations
+
+
+### Conclusion/Alternatives
+
+
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
