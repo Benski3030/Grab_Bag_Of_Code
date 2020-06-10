@@ -77,7 +77,6 @@ baby_data_all <- read_csv(
 ```{r}
 #Canadian Filter
 #there are a lot of Canadas in this data, need to combine them into one canada lable
-
 baby_data_ca <- baby_data_all %>% 
   filter(country %in% c("Canada", "canada", "CANADA", "CAnada")) %>% 
   select(-country)
@@ -93,68 +92,78 @@ prop.table(table(baby_data_ca$sex))
 ```
 Well this certainly looks like a crapshoot - maybe a simple binomial test can help determine if there is a difference between the boy/girl split
 
-```{r}
-#boy v girl
-gender_model_string <-
-"data {
-  # Number of data points
-  int n1;
-  # Number of successes
-  int y1[n1];
-}
-
-parameters {
-  real<lower=0, upper=1> theta1;
-}
-
-model {  
-  theta1 ~ beta(1, 1);
-  y1 ~ bernoulli(theta1);
-}
-
-generated quantities {
-}"
-
-#gender distro vector
-baby_gender <- c(rep(0, 151), rep(1, 144))
-gender_data_list <- list(y1 = baby_gender, n1 = length(baby_gender))
-stan_samples <- stan(model_code = gender_model_string, data = gender_data_list)
-s <- as.data.frame(stan_samples)
-mean(s$theta1)
-```
-
-```{r}
-```
-
-```{stan output.var=gender_model_string}
+```{stan output.var="gender_diff", eval=FALSE}
 data {
-  # Number of data points
+  // Number of data points
   int n1;
-  # Number of successes
+  // Number of successes
   int y1[n1];
 }
 
 parameters {
-  real<lower=0, upper=1> theta1;
+  real<lower=0, upper=1> theta;
 }
 
 model {  
-  theta1 ~ beta(1, 1);
-  y1 ~ bernoulli(theta1);
+  theta ~ beta(1, 1);
+  y1 ~ bernoulli(theta);
 }
 
 generated quantities {}
+```
 
+
+```{r}
+#gender distro vector
+baby_gender <- c(rep(0, 151), rep(1, 144))
+gender_data_list <- list(y1 = baby_gender, n1 = length(baby_gender))
+stan_samples <- sampling(gender_diff, data = gender_data_list)
+s <- as.data.frame(stan_samples)
 ```
 
 ```{r}
+hist(s$theta)
+mean(s$theta > 0.5)
 ```
-
 
 #### On what day will the baby be born?
+```{stan output.var = born_date, eval = False}
+data {
+  int n1;
+  vector[n1] y1;
+}
+parameters {
+  real mu1;
+  real<lower=0> sigma1;
+}
+model {  
+  mu1 ~ uniform(-40, 40);
+  sigma1 ~ uniform(0, 1000);
+  y1 ~ normal(mu1, sigma1);
+}
+generated quantities {}
+```
+
+
+```{r}
+data_list <- list(y1 = baby_data_ca$miss_date,
+                  n1 = length(baby_data_ca$miss_date))
+
+stan_samples <- sampling(born_date, data = data_list)
+```
+```{r}
+s <- as.data.frame(stan_samples)
+ggplot(s, aes(x = mu1)) +
+         geom_histogram(color="black", fill="lightblue") +
+  geom_vline(xintercept = mean(s$mu1), color="red", linetype=1, size =2) +
+  ggtitle(expression(paste("Posterior estimate for ", mu))) + 
+  theme_classic()
+```
+
 ```{r}
 
 ```
+
 
 #### What time will the baby be born?
 ```{r}
